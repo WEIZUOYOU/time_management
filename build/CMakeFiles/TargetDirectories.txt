@@ -1,0 +1,3 @@
+D:/TASK/CLASS/大二/综合实训一/time_management/build/CMakeFiles/time_management.dir
+D:/TASK/CLASS/大二/综合实训一/time_management/build/CMakeFiles/edit_cache.dir
+D:/TASK/CLASS/大二/综合实训一/time_management/build/CMakeFiles/rebuild_cache.dir
