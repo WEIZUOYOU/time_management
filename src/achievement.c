@@ -66,6 +66,9 @@ void InitAchievementManager(AchievementManager *manager) {
     manager->lastPomodoroDate = 0;
     manager->streakDays = 0;
     manager->consecutivePomodoros = 0;
+
+    // 初始化中断标记
+    manager->interruptionOccurred = false;
 }
 
 void UnlockAchievement(AchievementManager *manager, AchievementID id) {
@@ -89,39 +92,39 @@ void UnlockNegativeAchievement(AchievementManager *manager, NegativeAchievementI
 }
 
 void CheckAchievements(AchievementManager *manager, bool pomodoroCompleted, bool trashCleaned, int duration) {
-    // 只有在完成番茄钟时才更新统计
-    if (pomodoroCompleted) {
-        manager->totalPomodoros++;
-        
-        // 检查成就解锁条件
-        if (manager->totalPomodoros == 1) {
-            UnlockAchievement(manager, ACH_FIRST_POMODORO);
-        }
-    }
+    // 将 nowTm 的声明移到函数开头
     time_t now = time(NULL);
     struct tm *nowTm = localtime(&now);
-    time_t today = mktime(nowTm); // 今天的0点时间
     
-    // 连续天数统计
-    if (pomodoroCompleted) {
+    // 修复：只有在实际完成时才增加计数
+    if (pomodoroCompleted && !manager->interruptionOccurred) {
+        manager->totalPomodoros++;
+        
+        if (duration == 45 * 60) {
+            manager->longSessionCount++;
+        }
+    }
+    
+    // 修复连续天数统计
+    if (pomodoroCompleted && !manager->interruptionOccurred) {
+        time_t today = mktime(nowTm); // 今天的0点时间
+        
         if (manager->lastPomodoroDate == 0) {
-            manager->lastPomodoroDate = today;
             manager->currentStreak = 1;
         } else {
-            // 计算天数差时使用本地时间
             double diff = difftime(today, manager->lastPomodoroDate) / (60 * 60 * 24);
-
-            if (diff == 1) {
+            
+            if (diff == 1) { // 连续天
                 manager->currentStreak++;
-            } else if (diff > 1) {
+            } else if (diff > 1) { // 中断
+                manager->currentStreak = 1;
                 if (manager->currentStreak >= 3) {
                     UnlockNegativeAchievement(manager, NEG_BROKEN_STREAK);
                 }
-                manager->currentStreak = 1;
             }
         }
         manager->lastPomodoroDate = today;
-        manager->streakDays = manager->currentStreak;  // 更新连续天数
+        manager->streakDays = manager->currentStreak;
     }
     
     if (pomodoroCompleted) {

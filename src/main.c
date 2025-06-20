@@ -897,53 +897,55 @@ void UpdateTimerLogic(AppState *state) {
 
 // 主界面输入处理
 void HandleMainScreenInput(AppState *state, float screenWidth, float screenHeight) {
-    // 使用相同的坐标计算
-    const float topMargin = 20.0f;
-    const float buttonSize = 50.0f;
-    const float buttonSpacing = 40.0f;
-    const float groupRightMargin = 20.0f;
+    // 使用相同的坐标计算作为绘制函数
+    const float topMargin = 20.0f;          // 上边距
+    const float buttonSize = 50.0f;         // 按钮大小
+    const float buttonSpacing = 40.0f;      // 按钮间距
+    const float groupRightMargin = 20.0f;   // 组右边距
 
+    // 计算按钮组总宽度
     float groupWidth = 3 * buttonSize + 2 * buttonSpacing;
     float startX = screenWidth - groupWidth - groupRightMargin;
 
-    // 主题按钮
+    // 事件处理标志
+    bool eventHandled = false;
+
+    // === 主题按钮 ===
     Rectangle themeButton = {
         startX + buttonSize + buttonSpacing,
         topMargin,
         buttonSize,
         buttonSize
     };
-
-    if (CheckCollisionPointRec(GetMousePosition(), themeButton) && 
+    
+    if (!eventHandled && CheckCollisionPointRec(GetMousePosition(), themeButton) && 
         IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) 
     {
         // 切换主题
         state->isDarkTheme = !state->isDarkTheme;
-        
-        // 更新图标 - 确保这里使用正确的纹理
         state->themeIcon = state->isDarkTheme ? state->moonTexture : state->sunTexture;
-        
-        // 保存主题设置到持久化状态
         SaveAppThemeState(state->isDarkTheme);
+        eventHandled = true;
     }
 
-    // 成就按钮
+    // === 成就按钮 ===
     Rectangle achievementButton = {
         startX + 2 * (buttonSize + buttonSpacing),
         topMargin,
         buttonSize,
         buttonSize
     };
-
-    if (CheckCollisionPointRec(GetMousePosition(), achievementButton) && 
+    
+    if (!eventHandled && CheckCollisionPointRec(GetMousePosition(), achievementButton) && 
         IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) 
     {
         state->positiveScrollOffset = 0.0f;
         state->negativeScrollOffset = 0.0f;
         state->currentScreen = ACHIEVEMENT_SCREEN;
+        eventHandled = true;
     }
 
-    // 统计按钮
+    // === 统计按钮 ===
     Rectangle statisticsButton = {
         startX,
         topMargin,
@@ -951,7 +953,7 @@ void HandleMainScreenInput(AppState *state, float screenWidth, float screenHeigh
         buttonSize
     };
     
-    if (CheckCollisionPointRec(GetMousePosition(), statisticsButton) && 
+    if (!eventHandled && CheckCollisionPointRec(GetMousePosition(), statisticsButton) && 
         IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) 
     {
         // 更新统计数据
@@ -963,11 +965,15 @@ void HandleMainScreenInput(AppState *state, float screenWidth, float screenHeigh
         state->statistics.longSessions = state->achievementManager.longSessionCount;
         
         state->currentScreen = STATISTICS_SCREEN;
+        eventHandled = true;
     }
     
-    // 预设选项点击
+    // 预设选项点击 - 使用与绘制相同的坐标
+    const float presetStartY = 180.0f;
+    const float presetSpacing = 80.0f;
+    
     for (int i = 0; i < 3; i++) {
-        float rectY = 200.0f + i * 80.0f;
+        float rectY = presetStartY + i * presetSpacing;
         Rectangle rect = {
             screenWidth/2.0f - 150.0f,
             rectY,
@@ -975,9 +981,10 @@ void HandleMainScreenInput(AppState *state, float screenWidth, float screenHeigh
             50.0f
         };
         
-        if (CheckCollisionPointRec(GetMousePosition(), rect) && 
+        if (!eventHandled && CheckCollisionPointRec(GetMousePosition(), rect) && 
             IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
             state->selectedPreset = i;
+            eventHandled = true;
             
             if (i == 2) { // 自定义选项
                 state->editingCustom = true;
@@ -999,13 +1006,16 @@ void HandleMainScreenInput(AppState *state, float screenWidth, float screenHeigh
     }
     
     // 自定义输入处理
-    if (state->selectedPreset == 2) {
-        float inputY = 440.0f;
+    if (!eventHandled && state->selectedPreset == 2) {
+        float inputY = presetStartY + 3 * presetSpacing + 20.0f;
         Rectangle inputRect = {screenWidth/2.0f - 150.0f, inputY, 300.0f, 50.0f};
         
         // 点击输入框
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
             state->editingCustom = CheckCollisionPointRec(GetMousePosition(), inputRect);
+            if (state->editingCustom) {
+                eventHandled = true;
+            }
         }
         
         if (state->editingCustom) {
@@ -1026,6 +1036,7 @@ void HandleMainScreenInput(AppState *state, float screenWidth, float screenHeigh
             // 实时验证输入范围
             if (IsKeyPressed(KEY_ENTER)) {
                 state->editingCustom = false;
+                eventHandled = true;
                 
                 if (strlen(state->customMinutes) > 0) {
                     int minutes = atoi(state->customMinutes);
@@ -1047,28 +1058,11 @@ void HandleMainScreenInput(AppState *state, float screenWidth, float screenHeigh
                     }
                 }
             }
-            
-            // 完成输入
-            if (IsKeyPressed(KEY_ENTER)) {
-                state->editingCustom = false;
-                
-                if (strlen(state->customMinutes) > 0) {
-                    int minutes = atoi(state->customMinutes);
-                    if (minutes >= 30 && minutes <= 120) { 
-                        state->pomodoroDuration = minutes * 60; // 分钟转秒
-                        state->timeLeft = state->pomodoroDuration;
-                        state->currentScreen = TIMER_SCREEN;
-                        state->timerActive = true;
-                        state->lastUpdateTime = GetTime();
-                        state->currentStudyImage = GetRandomValue(0, STUDY_IMAGE_COUNT - 1);
-                    }
-                }
-            }
         }
     }
-    
-    // 垃圾点击处理 - 使用圆形碰撞检测
-    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+
+    // 垃圾点击处理 - 只在没有其他事件处理时进行
+    if (!eventHandled && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
         Vector2 mousePos = GetMousePosition();
         for (int i = 0; i < trashCount; i++) {
             if (trashes[i].active && !trashes[i].cleaning) {
@@ -1086,6 +1080,7 @@ void HandleMainScreenInput(AppState *state, float screenWidth, float screenHeigh
                     state->timerActive = true;
                     state->lastUpdateTime = GetTime();
                     state->currentStudyImage = GetRandomValue(0, STUDY_IMAGE_COUNT - 1);
+                    eventHandled = true;
                     break;
                 }
             }
@@ -1460,55 +1455,52 @@ int main(void) {
     // 确保主题图标正确初始化
     state.themeIcon = state.isDarkTheme ? state.moonTexture : state.sunTexture;
     
-    Vector2 lastWindowPos = {0};
-    
+    // === 关键修复：定义 lastWindowPos ===
+    Vector2 lastWindowPos = GetWindowPosition();
+        
     while (!WindowShouldClose()) {
         Vector2 currentWindowPos = GetWindowPosition();
         
-        // 计算窗口加速度
-        Vector2 windowAcceleration = {
-            (currentWindowPos.x - lastWindowPos.x) * 10.0f,
-            (currentWindowPos.y - lastWindowPos.y) * 10.0f
-        };
+        // 实时更新窗口加速度
+        UpdateWindowAcceleration(currentWindowPos);
         
-        // 传递加速度参数
-        UpdateTrash(windowAcceleration);
-        
-        lastWindowPos = currentWindowPos;
+        // 窗口焦点处理
         bool isFocused = IsWindowFocused();
-        
-        // 处理窗口焦点变化
         if (state.currentScreen == TIMER_SCREEN && state.timerActive) {
             if (wasFocused && !isFocused) {
-                // 窗口失去焦点
-                focusLostTime = GetTime();
-                TraceLog(LOG_INFO, "窗口失去焦点");
-            }
-            else if (!wasFocused && isFocused) {
-                // 窗口重新获得焦点
-                focusLostTime = 0;
-                TraceLog(LOG_INFO, "窗口重新获得焦点");
-            }
-            
-            // 检查是否超过容忍时间
-            if (focusLostTime > 0 && (GetTime() - focusLostTime) > FOCUS_LOSS_TOLERANCE) {
-                // 处理中断逻辑
+                // 立即处理中断逻辑
                 state.interruptionOccurred = true;
                 state.achievementManager.interruptionsCount++;
-                GenerateTrash(state.pomodoroDuration / 60);  // 生成垃圾
+                GenerateTrash(state.pomodoroDuration / 60);
                 state.currentScreen = INTERRUPTION_ALERT;
-                focusLostTime = 0;
-                
-                // 检查负面成就
-                CheckAchievements(&state.achievementManager, false, false, 0);
+
+                // 设置中断标记
+                state.achievementManager.interruptionOccurred = true;
                 
                 // 震动效果
-                TriggerWindowShake(&state, 10.0f, 0.5f);
-                
-                TraceLog(LOG_INFO, "窗口失去焦点超过 %.1f 秒，中断计时", FOCUS_LOSS_TOLERANCE);
+                TriggerWindowShake(&state, 15.0f, 0.7f);
             }
         }
         wasFocused = isFocused;
+        
+        // 优化：减少垃圾更新频率
+        static int trashUpdateCounter = 0;
+        trashUpdateCounter++;
+        if (trashUpdateCounter >= 2) { // 每2帧更新一次垃圾
+            UpdateTrash();
+            trashUpdateCounter = 0;
+        }
+        
+        // 修复数据统计
+        if (state.currentScreen == STATISTICS_SCREEN) {
+            // 确保使用最新数据
+            state.statistics.totalPomodoros = state.achievementManager.totalPomodoros;
+            state.statistics.cleanedTrash = state.achievementManager.cleanedTrashCount;
+            state.statistics.generatedTrash = state.achievementManager.generatedTrashCount;
+            state.statistics.interruptions = state.achievementManager.interruptionsCount;
+            state.statistics.streakDays = state.achievementManager.streakDays;
+            state.statistics.longSessions = state.achievementManager.longSessionCount;
+        }
         
         // 更新窗口尺寸
         state.windowWidth = GetScreenWidth();
@@ -1518,8 +1510,6 @@ int main(void) {
         
         float screenWidth = (float)state.windowWidth;
         float screenHeight = (float)state.windowHeight;
-        
-        UpdateTrash(windowAcceleration);
 
         if (state.currentScreen == MAIN_SCREEN) {
             Rectangle themeButton = {
@@ -1581,6 +1571,8 @@ int main(void) {
             
             // 检查计时结束
             if (state.timeLeft <= 0) {
+                state.achievementManager.interruptionOccurred = false;
+
                 // 检查成就并处理计时结束逻辑
                 CheckAchievements(&state.achievementManager, 
                                 state.currentTrashIndex < 0,  // pomodoroCompleted
@@ -1682,6 +1674,8 @@ int main(void) {
                 DrawText("未知屏幕状态", screenWidth/2-100, screenHeight/2, 30, RED);
                 break;
         }
+
+        lastWindowPos = currentWindowPos;
         
         EndDrawing();
     }

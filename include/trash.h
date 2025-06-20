@@ -33,12 +33,13 @@ CollisionInfo GetCollisionInfo(Trash a, Trash b);
 void ResolveCollision(Trash *a, Trash *b, CollisionInfo info);
 void InitTrashSystem(void);
 void GenerateTrash(int duration);
-void UpdateTrash(Vector2 windowAcceleration);  // 添加参数
+void UpdateTrash();
 void DrawTrash(void);
 void CleanTrash(int index);
 void ResetTrashSystem(void);
 void SaveTrashSystem(const char* filename);  // 新增：保存垃圾系统状态
 void LoadTrashSystem(const char* filename);  // 新增：加载垃圾系统状态
+void UpdateWindowAcceleration(Vector2 currentPos);
 
 extern Trash trashes[MAX_TRASH];
 extern int trashCount;

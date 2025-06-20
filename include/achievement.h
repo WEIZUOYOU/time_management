@@ -63,6 +63,7 @@ typedef struct {
     time_t lastPomodoroDate;     // 上一个番茄钟完成的日期
     int streakDays;              // 当前连续天数
     int consecutivePomodoros;
+    bool interruptionOccurred;  // 标记当前番茄钟是否被中断
 } AchievementManager;
 
 // 函数声明
