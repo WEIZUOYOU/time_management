@@ -8,11 +8,11 @@
 Trash trashes[MAX_TRASH];
 int trashCount = 0;
 
-// 物理常量
-const float GRAVITY = 9.8f * 0.2f;  // 重力效果
-const float FLOOR_FRICTION = 2.0f;  // 摩擦力
-const float BOUNCE_FACTOR = 0.6f;    // 弹跳
-const float WINDOW_INFLUENCE = 0.1f; // 窗口移动影响
+// 物理常量 - 增加重力效果
+const float GRAVITY = 9.8f * 8.0f;   // 重力效果
+const float FLOOR_FRICTION = 0.8f;   // 摩擦力
+const float BOUNCE_FACTOR = 0.85f;    // 弹跳系数
+const float WINDOW_INFLUENCE = 1.2f; // 窗口移动影响
 
 // 窗口晃动变量
 float windowShakeX = 0.0f;
@@ -26,6 +26,120 @@ float windowVelocityX = 0;
 float windowVelocityY = 0;
 Vector2 lastWindowPos = {0};
 
+static float elapsedTime = 0.0f;
+static float physicsTimeStep = 1.0f / 60.0f; // 60Hz物理更新
+
+// 检查是否清理了所有类型的垃圾
+bool IsAllTrashTypeCleaned(void) {
+    // 假设有4种垃圾类型
+    #define MAX_TRASH_TYPES 4
+    
+    // 跟踪每种类型是否被清理过
+    bool typeCleaned[MAX_TRASH_TYPES] = {false};
+    
+    // 检查是否有任何未清理的垃圾
+    bool allCleaned = true;
+    
+    // 遍历所有垃圾
+    for (int i = 0; i < trashCount; i++) {
+        if (trashes[i].active) {
+            // 如果垃圾未被清理，则不是所有垃圾都被清理
+            if (!trashes[i].cleaning) {
+                allCleaned = false;
+            }
+            
+            // 标记该类型已被遇到
+            if (trashes[i].trashType < MAX_TRASH_TYPES) {
+                typeCleaned[trashes[i].trashType] = true;
+            }
+        }
+    }
+    
+    // 检查是否所有类型都存在过
+    for (int i = 0; i < MAX_TRASH_TYPES; i++) {
+        if (!typeCleaned[i]) {
+            allCleaned = false;
+            break;
+        }
+    }
+    
+    return allCleaned;
+}
+
+void UpdateTrash(void) {
+    // 累计时间
+    static float elapsedTime = 0.0f;
+    const float physicsTimeStep = 1.0f / 60.0f; // 60Hz物理更新
+    elapsedTime += GetFrameTime();
+    
+    // 确保固定时间步长更新
+    while (elapsedTime >= physicsTimeStep) {
+        // 应用加速度（包括重力）
+        for (int i = 0; i < trashCount; i++) {
+            if (trashes[i].active && !trashes[i].cleaning) {
+                // 应用重力加速度 - 增加效果
+                trashes[i].velocity.y += GRAVITY * physicsTimeStep;
+                
+                // 应用窗口加速度影响 - 增加影响
+                trashes[i].velocity.x += windowAcceleration.x * WINDOW_INFLUENCE * physicsTimeStep;
+                trashes[i].velocity.y += windowAcceleration.y * WINDOW_INFLUENCE * physicsTimeStep;
+                
+                // 减少速度衰减（让垃圾保持更快的速度）
+                trashes[i].velocity.x *= 0.99f;  // 从0.98f改为0.99f
+                trashes[i].velocity.y *= 0.99f;  // 从0.98f改为0.99f
+                
+                // 更新位置
+                trashes[i].position.x += trashes[i].velocity.x * physicsTimeStep;
+                trashes[i].position.y += trashes[i].velocity.y * physicsTimeStep;
+            }
+        }
+        
+        // 边界碰撞检测
+        float screenWidth = (float)GetScreenWidth();
+        float screenHeight = (float)GetScreenHeight();
+        
+        for (int i = 0; i < trashCount; i++) {
+            if (!trashes[i].active || trashes[i].cleaning) continue;
+            
+            // 左右边界 - 增加反弹力
+            if (trashes[i].position.x < trashes[i].radius) {
+                trashes[i].position.x = trashes[i].radius;
+                trashes[i].velocity.x = fabsf(trashes[i].velocity.x) * trashes[i].bounceFactor * 1.1f; // 增加10%反弹力
+            } else if (trashes[i].position.x > screenWidth - trashes[i].radius) {
+                trashes[i].position.x = screenWidth - trashes[i].radius;
+                trashes[i].velocity.x = -fabsf(trashes[i].velocity.x) * trashes[i].bounceFactor * 1.1f; // 增加10%反弹力
+            }
+            
+            // 上下边界 - 增加反弹力
+            if (trashes[i].position.y < trashes[i].radius) {
+                trashes[i].position.y = trashes[i].radius;
+                trashes[i].velocity.y = fabsf(trashes[i].velocity.y) * trashes[i].bounceFactor * 1.1f; // 增加10%反弹力
+            } else if (trashes[i].position.y > screenHeight - trashes[i].radius) {
+                trashes[i].position.y = screenHeight - trashes[i].radius;
+                trashes[i].velocity.y = -fabsf(trashes[i].velocity.y) * trashes[i].bounceFactor * 1.1f; // 增加10%反弹力
+                
+                // 减少地面摩擦力
+                trashes[i].velocity.x *= (1.0f - trashes[i].friction * physicsTimeStep);
+            }
+        }
+        
+        // 垃圾之间的碰撞检测和解决
+        for (int i = 0; i < trashCount; i++) {
+            if (!trashes[i].active || trashes[i].cleaning) continue;
+            for (int j = i + 1; j < trashCount; j++) {
+                if (!trashes[j].active || trashes[j].cleaning) continue;
+                
+                // 检测碰撞
+                CollisionInfo info = GetCollisionInfo(trashes[i], trashes[j]);
+                if (info.collided) {
+                    ResolveCollision(&trashes[i], &trashes[j], info);
+                }
+            }
+        }
+        
+        elapsedTime -= physicsTimeStep;
+    }
+}
 
 void UpdateWindowAcceleration(Vector2 currentPos) {
     Vector2 delta = {
@@ -33,13 +147,13 @@ void UpdateWindowAcceleration(Vector2 currentPos) {
         currentPos.y - lastWindowPos.y
     };
     
-    // 计算瞬时速度
-    windowVelocityX = delta.x * 0.8f + windowVelocityX * 0.2f;
-    windowVelocityY = delta.y * 0.8f + windowVelocityY * 0.2f;
+    // 减少衰减因子，让窗口移动影响更大
+    windowVelocityX = windowVelocityX * 0.3f + delta.x * 0.7f;  // 从0.5f改为0.3f/0.7f
+    windowVelocityY = windowVelocityY * 0.3f + delta.y * 0.7f;  // 从0.5f改为0.3f/0.7f
     
-    // 更新加速度
-    windowAcceleration.x = windowVelocityX * 5.0f;
-    windowAcceleration.y = windowVelocityY * 5.0f;
+    // 增加加速度影响 (从3.0f提高到5.0f)
+    windowAcceleration.x = Clamp(windowVelocityX * 5.0f, -800.0f, 800.0f); // 从500提高到800
+    windowAcceleration.y = Clamp(windowVelocityY * 5.0f, -800.0f, 800.0f); // 从500提高到800
     
     lastWindowPos = currentPos;
 }
@@ -65,14 +179,18 @@ void GenerateTrash(int duration) {
     int trashType = duration / 15;  // 简单分类
     if (trashType > 3) trashType = 3;
     
+    // 创建更快的初始速度 (从150-300提高到200-500)
+    float initialSpeed = GetRandomValue(200, 500) / 100.0f; 
+    float angle = DEG2RAD * GetRandomValue(0, 360); // 随机角度
+    
     trashes[trashCount] = (Trash){
         .position = {
             (float)GetRandomValue(50, (int)GetScreenWidth() - 50),
             (float)GetRandomValue((int)GetScreenHeight() * 0.3f, (int)GetScreenHeight() * 0.7f)
         },
         .velocity = {
-            (float)GetRandomValue(-30, 30) / 100.0f,
-            (float)GetRandomValue(50, 100) / 100.0f
+            cosf(angle) * initialSpeed, // X方向速度
+            sinf(angle) * initialSpeed  // Y方向速度
         },
         .scale = GetRandomValue(5, 10) / 10.0f,
         .active = true,
@@ -87,91 +205,11 @@ void GenerateTrash(int duration) {
     
     trashCount++;
 }
- 
+
 void CleanTrash(int index) {
     if (index >= 0 && index < trashCount) {
         trashes[index].cleaning = true;
         trashes[index].cleanProgress = 0.0f;  // 重置进度
-    }
-}
-
-void UpdateTrash(void) {
-    // 应用窗口加速度到所有垃圾
-    for (int i = 0; i < trashCount; i++) {
-        if (trashes[i].active) {
-            trashes[i].velocity.x += windowAcceleration.x * WINDOW_INFLUENCE;
-            trashes[i].velocity.y += windowAcceleration.y * WINDOW_INFLUENCE;
-            
-            // 保留部分加速度（不重置）
-            trashes[i].velocity.x *= 0.95f;
-            trashes[i].velocity.y *= 0.95f;
-        }
-    }
-    
-    // 碰撞检测频率降低为每2帧一次
-    static int frameCount = 0;
-    frameCount++;
-    if (frameCount % 2 == 0) {
-        // 垃圾间碰撞检测（简化版）
-        for (int i = 0; i < trashCount; i++) {
-            if (!trashes[i].active) continue;
-            
-            for (int j = i + 1; j < trashCount; j++) {
-                if (!trashes[j].active) continue;
-                
-                // 简化的碰撞检测与响应
-                float dx = trashes[j].position.x - trashes[i].position.x;
-                float dy = trashes[j].position.y - trashes[i].position.y;
-                float distance = sqrtf(dx*dx + dy*dy);
-                float minDistance = trashes[i].radius + trashes[j].radius;
-                
-                if (distance < minDistance && distance > 0.01f) {
-                    float overlap = 0.5f * (distance - minDistance);
-                    float moveX = overlap * dx / distance;
-                    float moveY = overlap * dy / distance;
-                    
-                    // 位置修正
-                    trashes[i].position.x += moveX;
-                    trashes[i].position.y += moveY;
-                    trashes[j].position.x -= moveX;
-                    trashes[j].position.y -= moveY;
-                    
-                    // 速度交换（简化版碰撞响应）
-                    float tempVx = trashes[i].velocity.x;
-                    float tempVy = trashes[i].velocity.y;
-                    trashes[i].velocity.x = trashes[j].velocity.x * 0.8f;
-                    trashes[i].velocity.y = trashes[j].velocity.y * 0.8f;
-                    trashes[j].velocity.x = tempVx * 0.8f;
-                    trashes[j].velocity.y = tempVy * 0.8f;
-                }
-            }
-        }
-    }
-    
-    // 边界碰撞增强反馈
-    float screenWidth = (float)GetScreenWidth();
-    float screenHeight = (float)GetScreenHeight();
-    
-    for (int i = 0; i < trashCount; i++) {
-        if (!trashes[i].active) continue;
-        
-        // 增强边界碰撞反馈
-        if (trashes[i].position.x < trashes[i].radius) {
-            trashes[i].position.x = trashes[i].radius;
-            trashes[i].velocity.x = fabsf(trashes[i].velocity.x) * BOUNCE_FACTOR;
-        } else if (trashes[i].position.x > screenWidth - trashes[i].radius) {
-            trashes[i].position.x = screenWidth - trashes[i].radius;
-            trashes[i].velocity.x = -fabsf(trashes[i].velocity.x) * BOUNCE_FACTOR;
-        }
-        
-        if (trashes[i].position.y < trashes[i].radius) {
-            trashes[i].position.y = trashes[i].radius;
-            trashes[i].velocity.y = fabsf(trashes[i].velocity.y) * BOUNCE_FACTOR;
-        } else if (trashes[i].position.y > screenHeight - trashes[i].radius) {
-            trashes[i].position.y = screenHeight - trashes[i].radius;
-            trashes[i].velocity.y = -fabsf(trashes[i].velocity.y) * BOUNCE_FACTOR;
-            trashes[i].velocity.x *= (1.0f - FLOOR_FRICTION * GetFrameTime());
-        }
     }
 }
 

@@ -66,6 +66,8 @@ void InitAchievementManager(AchievementManager *manager) {
     manager->lastPomodoroDate = 0;
     manager->streakDays = 0;
     manager->consecutivePomodoros = 0;
+    manager->dailyPomodoros = 0;
+    manager->lastPomodoroDay = 0;
 
     // 初始化中断标记
     manager->interruptionOccurred = false;
@@ -96,53 +98,65 @@ void CheckAchievements(AchievementManager *manager, bool pomodoroCompleted, bool
     time_t now = time(NULL);
     struct tm *nowTm = localtime(&now);
     
-    // 修复：只有在实际完成时才增加计数
-    if (pomodoroCompleted && !manager->interruptionOccurred) {
-        manager->totalPomodoros++;
-        
-        if (duration == 45 * 60) {
-            manager->longSessionCount++;
-        }
-    }
-    
     // 修复连续天数统计
     if (pomodoroCompleted && !manager->interruptionOccurred) {
-        time_t today = mktime(nowTm); // 今天的0点时间
+        // 创建今天的0点时间
+        struct tm today_tm = *nowTm;
+        today_tm.tm_hour = 0;
+        today_tm.tm_min = 0;
+        today_tm.tm_sec = 0;
+        time_t today = mktime(&today_tm);
         
         if (manager->lastPomodoroDate == 0) {
             manager->currentStreak = 1;
         } else {
-            double diff = difftime(today, manager->lastPomodoroDate) / (60 * 60 * 24);
+            // 将上次完成日期也转换为0点
+            struct tm *lastTm = localtime(&manager->lastPomodoroDate);
+            struct tm lastMidnight_tm = *lastTm;
+            lastMidnight_tm.tm_hour = 0;
+            lastMidnight_tm.tm_min = 0;
+            lastMidnight_tm.tm_sec = 0;
+            time_t lastMidnight = mktime(&lastMidnight_tm);
+            
+            double diff = difftime(today, lastMidnight) / (60 * 60 * 24);
             
             if (diff == 1) { // 连续天
                 manager->currentStreak++;
             } else if (diff > 1) { // 中断
-                manager->currentStreak = 1;
+                // 先检查是否需要解锁负面成就
                 if (manager->currentStreak >= 3) {
                     UnlockNegativeAchievement(manager, NEG_BROKEN_STREAK);
                 }
+                manager->currentStreak = 1; // 重置为1
             }
         }
         manager->lastPomodoroDate = today;
         manager->streakDays = manager->currentStreak;
-    }
-    
-    if (pomodoroCompleted) {
-        manager->totalPomodoros++;
         
-        // 检查长时间番茄钟
-        if (duration == 45 * 60) {
-            manager->longSessionCount++;
+        // 更新每日番茄钟计数
+        if (manager->lastPomodoroDay != today) {
+            manager->dailyPomodoros = 0;
+            manager->lastPomodoroDay = today;
         }
+        manager->dailyPomodoros++;
         
-        // 检查时间相关成就
+        // 更新连续番茄钟计数
+        manager->consecutivePomodoros++;
+    } else if (manager->interruptionOccurred) {
+        // 中断时重置连续番茄钟计数
+        manager->consecutivePomodoros = 0;
+        manager->interruptionOccurred = false; // 重置中断标志
+    }
+
+    // 检查时间相关成就（仅当完成番茄钟时）
+    if (pomodoroCompleted) {
         if (nowTm->tm_hour >= 6 && nowTm->tm_hour < 8) {
             UnlockAchievement(manager, ACH_EARLY_BIRD);
         } else if (nowTm->tm_hour >= 22 || nowTm->tm_hour < 1) {
             UnlockAchievement(manager, ACH_NIGHT_OWL);
         }
     }
-    
+
     // ================ 检查正面成就解锁条件 ================
     if (manager->totalPomodoros >= 1 && !manager->achievements[ACH_FIRST_POMODORO].unlocked) {
         UnlockAchievement(manager, ACH_FIRST_POMODORO);
@@ -171,12 +185,24 @@ void CheckAchievements(AchievementManager *manager, bool pomodoroCompleted, bool
         UnlockAchievement(manager, ACH_LONG_SESSION);
     }
     
-    if (manager->currentStreak >= 3 && !manager->achievements[ACH_MARATHON].unlocked) {
+    // 修复马拉松成就：使用连续完成的番茄钟数（consecutivePomodoros）
+    if (manager->consecutivePomodoros >= 3 && !manager->achievements[ACH_MARATHON].unlocked) {
         UnlockAchievement(manager, ACH_MARATHON);
     }
     
     if (manager->streakDays >= 7 && !manager->achievements[ACH_7_DAY_STREAK].unlocked) {
         UnlockAchievement(manager, ACH_7_DAY_STREAK);
+    }
+    
+    // 添加完美一天成就（一天内完成5个番茄钟）
+    if (manager->dailyPomodoros >= 5 && !manager->achievements[ACH_PERFECT_DAY].unlocked) {
+        UnlockAchievement(manager, ACH_PERFECT_DAY);
+    }
+    
+    // 添加清洁大师成就（清理所有类型的垃圾）
+    // 注意：需要实现 IsAllTrashTypeCleaned 函数
+    if (IsAllTrashTypeCleaned() && !manager->achievements[ACH_CLEAN_MASTER].unlocked) {
+        UnlockAchievement(manager, ACH_CLEAN_MASTER);
     }
     
     // ================ 检查负面成就解锁条件 ================
@@ -200,8 +226,11 @@ void CheckAchievements(AchievementManager *manager, bool pomodoroCompleted, bool
         UnlockNegativeAchievement(manager, NEG_10_TRASHES);
     }
 
-    // 添加自定义成就检查
-    if (duration != 25 && duration != 45 && duration > 0 && 
+    // 修复自定义成就检查：使用秒数比较
+    if (pomodoroCompleted && 
+        duration != 25*60 && 
+        duration != 45*60 && 
+        duration > 0 && 
         !manager->achievements[ACH_CUSTOM_SESSION].unlocked) {
         UnlockAchievement(manager, ACH_CUSTOM_SESSION);
     }

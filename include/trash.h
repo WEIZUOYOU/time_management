@@ -21,10 +21,10 @@ typedef struct {
 } Trash;
 
 // 碰撞信息结构体
-typedef struct {
+typedef struct CollisionInfo {
     bool collided;
-    Vector2 normal;
-    float depth;
+    Vector2 normal; // 碰撞法线（从a指向b）
+    float depth;    // 穿透深度
 } CollisionInfo;
 
 // 函数声明
@@ -40,6 +40,7 @@ void ResetTrashSystem(void);
 void SaveTrashSystem(const char* filename);  // 新增：保存垃圾系统状态
 void LoadTrashSystem(const char* filename);  // 新增：加载垃圾系统状态
 void UpdateWindowAcceleration(Vector2 currentPos);
+bool IsAllTrashTypeCleaned(void);
 
 extern Trash trashes[MAX_TRASH];
 extern int trashCount;

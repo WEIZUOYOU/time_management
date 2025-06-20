@@ -867,32 +867,40 @@ void DrawCleanFailedAlert(AppState *state, float screenWidth, float screenHeight
 
 // 计时逻辑更新
 void UpdateTimerLogic(AppState *state) {
-    bool trashCleaned = false;
-    
-    // 只处理计时结束的情况
     if (state->timeLeft <= 0) {
         state->timerActive = false;
+        bool pomodoroCompleted = false;
+        bool trashCleaned = false;
         
         if (state->currentTrashIndex >= 0) {
             CleanTrash(state->currentTrashIndex);
             state->achievementManager.cleanedTrashCount++;
-            state->currentTrashIndex = -1;
             trashCleaned = true;
+            state->currentTrashIndex = -1;
         } else {
             state->achievementManager.totalPomodoros++;
+            pomodoroCompleted = true;
             state->interruptionOccurred = false;
-            CheckAchievements(&state->achievementManager, true, false, state->pomodoroDuration);
             
-            if (state->pomodoroDuration == 45*60) {
-                state->achievementManager.longSessionCount++;
+            // 更新番茄钟类型统计
+            if (state->pomodoroDuration == 25 * 60) {
+                state->statistics.pomodoros25++;
+            } else if (state->pomodoroDuration == 45 * 60) {
+                state->statistics.pomodoros45++;
+                state->achievementManager.longSessionCount++; // 只在这里增加
+            } else {
+                state->statistics.pomodorosCustom++;
             }
         }
         
+        // 在计数更新后检查成就
+        CheckAchievements(&state->achievementManager, 
+                         pomodoroCompleted, 
+                         trashCleaned, 
+                         state->pomodoroDuration);
+        
         state->currentScreen = MAIN_SCREEN;
     }
-        
-    // 添加成就检查
-    CheckAchievements(&state->achievementManager, false, true, state->pomodoroDuration);
 }
 
 // 主界面输入处理
@@ -997,10 +1005,6 @@ void HandleMainScreenInput(AppState *state, float screenWidth, float screenHeigh
                 state->timerActive = true;
                 state->lastUpdateTime = GetTime();
                 state->currentStudyImage = GetRandomValue(0, STUDY_IMAGE_COUNT - 1);
-                
-                if (state->pomodoroDuration == 45*60) {
-                    state->achievementManager.longSessionCount++;
-                }
             }
         }
     }
@@ -1341,6 +1345,42 @@ void UnloadResources(AppState *state) {
     }
 }
 
+void ProcessTimerCompletion(AppState *state) {
+    bool pomodoroCompleted = false;
+    bool trashCleaned = false;
+    
+    if (state->timeLeft <= 0) {
+        state->timerActive = false;
+        
+        if (state->currentTrashIndex >= 0) {
+            CleanTrash(state->currentTrashIndex);
+            state->achievementManager.cleanedTrashCount++;
+            trashCleaned = true;
+            state->currentTrashIndex = -1;
+        } else {
+            state->achievementManager.totalPomodoros++;
+            state->interruptionOccurred = false;
+            pomodoroCompleted = true;
+            
+            // 更新番茄钟类型统计
+            if (state->pomodoroDuration == 25 * 60) {
+                state->statistics.pomodoros25++;
+            } else if (state->pomodoroDuration == 45 * 60) {
+                state->statistics.pomodoros45++;
+            } else {
+                state->statistics.pomodorosCustom++;
+            }
+        }
+        
+        // 统一在此处检查成就
+        CheckAchievements(&state->achievementManager, 
+                         pomodoroCompleted, 
+                         trashCleaned, 
+                         state->pomodoroDuration);
+    }
+}
+
+
 int main(void) {
     // 状态文件路径
     const char* trashStateFile = "trash_state.dat";
@@ -1471,11 +1511,15 @@ int main(void) {
                 // 立即处理中断逻辑
                 state.interruptionOccurred = true;
                 state.achievementManager.interruptionsCount++;
+                state.achievementManager.generatedTrashCount++; // 增加产生垃圾数
                 GenerateTrash(state.pomodoroDuration / 60);
                 state.currentScreen = INTERRUPTION_ALERT;
 
                 // 设置中断标记
                 state.achievementManager.interruptionOccurred = true;
+                
+                // 关键修改：中断发生时检查成就
+                CheckAchievements(&state.achievementManager, false, false, state.pomodoroDuration);
                 
                 // 震动效果
                 TriggerWindowShake(&state, 15.0f, 0.7f);
@@ -1486,10 +1530,7 @@ int main(void) {
         // 优化：减少垃圾更新频率
         static int trashUpdateCounter = 0;
         trashUpdateCounter++;
-        if (trashUpdateCounter >= 2) { // 每2帧更新一次垃圾
-            UpdateTrash();
-            trashUpdateCounter = 0;
-        }
+        UpdateTrash();
         
         // 修复数据统计
         if (state.currentScreen == STATISTICS_SCREEN) {
@@ -1501,6 +1542,7 @@ int main(void) {
             state.statistics.streakDays = state.achievementManager.streakDays;
             state.statistics.longSessions = state.achievementManager.longSessionCount;
         }
+        
         
         // 更新窗口尺寸
         state.windowWidth = GetScreenWidth();
@@ -1571,15 +1613,7 @@ int main(void) {
             
             // 检查计时结束
             if (state.timeLeft <= 0) {
-                state.achievementManager.interruptionOccurred = false;
-
-                // 检查成就并处理计时结束逻辑
-                CheckAchievements(&state.achievementManager, 
-                                state.currentTrashIndex < 0,  // pomodoroCompleted
-                                state.currentTrashIndex >= 0,  // trashCleaned
-                                state.pomodoroDuration);
-                
-                // 处理计时结束的逻辑
+                // 关键修改：在计时结束时处理成就和统计
                 UpdateTimerLogic(&state);
             }
         }

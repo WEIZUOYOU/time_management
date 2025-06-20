@@ -6,23 +6,23 @@
 
 // 正面成就ID
 typedef enum {
-    ACH_FIRST_POMODORO,          // 完成第一个番茄钟
-    ACH_5_POMODOROS,             // 完成5个番茄钟
-    ACH_10_POMODOROS,            // 完成10个番茄钟
-    ACH_20_POMODOROS,            // 完成20个番茄钟
-    ACH_CLEAN_1_TRASH,           // 清理1个垃圾
-    ACH_CLEAN_5_TRASHES,         // 清理5个垃圾
-    ACH_CLEAN_10_TRASHES,        // 清理10个垃圾
-    ACH_LONG_SESSION,            // 完成一个45分钟的番茄钟
-    ACH_MARATHON,                // 连续完成3个番茄钟（中间没有中断）
-    ACH_7_DAY_STREAK,            // 连续7天每天至少完成一个番茄钟
-    ACH_NO_INTERRUPTIONS,        // 完成一个番茄钟没有任何中断
-    ACH_CUSTOM_SESSION,          // 完成一个自定义时长的番茄钟
-    ACH_MASTER_CLEANER,          // 清理所有类型的垃圾
-    ACH_PERFECT_DAY,             // 一天内完成5个番茄钟
-    ACH_EARLY_BIRD,              // 在早上6-8点完成番茄钟
-    ACH_NIGHT_OWL,               // 在晚上10-12点完成番茄钟
-    ACH_COUNT                    // 成就总数
+    ACH_FIRST_POMODORO,        // 0: 初尝专注
+    ACH_5_POMODOROS,            // 1: 小有所成
+    ACH_10_POMODOROS,           // 2: 渐入佳境
+    ACH_20_POMODOROS,           // 3: 专注大师
+    ACH_CLEAN_1_TRASH,          // 4: 垃圾清理工
+    ACH_CLEAN_5_TRASHES,        // 5: 环境卫士
+    ACH_CLEAN_10_TRASHES,       // 6: 清洁专家
+    ACH_LONG_SESSION,           // 7: 持久专注
+    ACH_MARATHON,               // 8: 专注马拉松
+    ACH_7_DAY_STREAK,           // 9: 七日坚持
+    ACH_FLAWLESS,               // 10: 无懈可击
+    ACH_CUSTOM_SESSION,         // 11: 自定义挑战
+    ACH_CLEAN_MASTER,           // 12: 清洁大师 - 新增
+    ACH_PERFECT_DAY,            // 13: 完美一天 - 新增
+    ACH_EARLY_BIRD,             // 14: 晨型人
+    ACH_NIGHT_OWL,              // 15: 夜猫子
+    ACH_COUNT                   // 16: 成就总数
 } AchievementID;
 
 // 负面成就ID
@@ -62,8 +62,10 @@ typedef struct {
     int currentStreak;           // 当前连续番茄钟计数
     time_t lastPomodoroDate;     // 上一个番茄钟完成的日期
     int streakDays;              // 当前连续天数
-    int consecutivePomodoros;
     bool interruptionOccurred;  // 标记当前番茄钟是否被中断
+    int consecutivePomodoros;   // 连续完成的番茄钟数
+    int dailyPomodoros;         // 今日完成的番茄钟数
+    time_t lastPomodoroDay;     // 上次完成番茄钟的日期
 } AchievementManager;
 
 // 函数声明
@@ -74,5 +76,6 @@ void CheckAchievements(AchievementManager *manager, bool pomodoroCompleted, bool
 void SaveAchievements(const AchievementManager *manager, const char *filename);
 void LoadAchievements(AchievementManager *manager, const char *filename);
 void ResetAchievements(AchievementManager *manager);
+bool IsAllTrashTypeCleaned(void);
 
 #endif // ACHIEVEMENT_H

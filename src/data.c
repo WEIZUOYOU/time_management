@@ -72,7 +72,7 @@ void DrawStatisticsScreen(Statistics *stats, Font font, bool isDarkTheme, float 
         yPos += lineHeight;
     }
     
-    // 图表区域
+    // === 图表区域 ===
     const int chartHeight = 200;
     const int chartWidth = 500;
     int chartX = panel.x + (panel.width - chartWidth) / 2;
@@ -87,16 +87,19 @@ void DrawStatisticsScreen(Statistics *stats, Font font, bool isDarkTheme, float 
     DrawRectangle(chartX, chartY, chartWidth, chartHeight, 
                 isDarkTheme ? (Color){50, 50, 60, 255} : (Color){220, 220, 220, 255});
     
+    // 计算最大值用于比例缩放
+    int maxValue = stats->pomodoros25;
+    if (stats->pomodoros45 > maxValue) maxValue = stats->pomodoros45;
+    if (stats->pomodorosCustom > maxValue) maxValue = stats->pomodorosCustom;
+    if (maxValue == 0) maxValue = 1; // 防止除以零
+
     // 简单条形图
     int barWidth = 80;
     int barSpacing = 20;
     int startX = chartX + (chartWidth - (3 * barWidth + 2 * barSpacing)) / 2;
     
-    // 计算最大值用于比例缩放
-    int maxValue = stats->totalPomodoros > 0 ? stats->totalPomodoros : 1;
-    
     // 25分钟番茄钟
-    int barHeight25 = (int)((stats->totalPomodoros * 0.7f) / maxValue * chartHeight);
+    int barHeight25 = (int)((float)stats->pomodoros25 / maxValue * chartHeight);
     DrawRectangle(startX, chartY + chartHeight - barHeight25, barWidth, barHeight25, 
                 isDarkTheme ? GOLD : SKYBLUE);
     DrawTextEx(font, "25分钟", 
@@ -104,7 +107,7 @@ void DrawStatisticsScreen(Statistics *stats, Font font, bool isDarkTheme, float 
              20, 1, textColor);
     
     // 45分钟番茄钟
-    int barHeight45 = (int)((stats->totalPomodoros * 0.2f) / maxValue * chartHeight);
+    int barHeight45 = (int)((float)stats->pomodoros45 / maxValue * chartHeight);
     DrawRectangle(startX + barWidth + barSpacing, chartY + chartHeight - barHeight45, barWidth, barHeight45, 
                 isDarkTheme ? GOLD : SKYBLUE);
     DrawTextEx(font, "45分钟", 
@@ -112,7 +115,7 @@ void DrawStatisticsScreen(Statistics *stats, Font font, bool isDarkTheme, float 
              20, 1, textColor);
     
     // 自定义番茄钟
-    int barHeightCustom = (int)((stats->totalPomodoros * 0.1f) / maxValue * chartHeight);
+    int barHeightCustom = (int)((float)stats->pomodorosCustom / maxValue * chartHeight);
     DrawRectangle(startX + 2 * (barWidth + barSpacing), chartY + chartHeight - barHeightCustom, barWidth, barHeightCustom, 
                 isDarkTheme ? GOLD : SKYBLUE);
     DrawTextEx(font, "自定义", 

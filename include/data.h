@@ -11,6 +11,9 @@ typedef struct {
     int interruptions;
     int streakDays;
     int longSessions;
+    int pomodoros25;
+    int pomodoros45;
+    int pomodorosCustom;
 } Statistics;
 
 // 统计界面函数
